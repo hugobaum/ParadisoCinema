@@ -15,9 +15,7 @@ import {
   Gauge,
   Globe,
   Home,
-  KeyRound,
   LogOut,
-  Mail,
   MessageSquare,
   Monitor,
   MoveDown,
@@ -35,20 +33,23 @@ import {
   X,
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 import { getAuthInfoFromBrowserCookie } from '@/lib/auth';
-import { clearAllDanmakuCache } from '@/lib/danmaku/api';
+import { clearAllDanmakuCache, getDanmakuCacheStats } from '@/lib/danmaku/api';
 import { CURRENT_VERSION } from '@/lib/version';
 import { UpdateStatus } from '@/lib/version_check';
 
+import { DeviceManagementPanel } from './DeviceManagementPanel';
+import { DownloadManagementPanel } from './DownloadManagementPanel';
+import { EmailSettingsPanel } from './EmailSettingsPanel';
 import { FavoritesPanel } from './FavoritesPanel';
 import { NotificationPanel } from './NotificationPanel';
 import { OfflineDownloadPanel } from './OfflineDownloadPanel';
+import { PersonalCenterPanel } from './PersonalCenterPanel';
 import { useVersionCheck } from './VersionCheckProvider';
 import { VersionPanel } from './VersionPanel';
-import { DownloadManagementPanel } from './DownloadManagementPanel';
 
 interface AuthInfo {
   username?: string;
@@ -59,20 +60,25 @@ export const UserMenu: React.FC = () => {
   const router = useRouter();
   const { updateStatus, isChecking } = useVersionCheck();
   const [isOpen, setIsOpen] = useState(false);
+  const [isProfileCenterOpen, setIsProfileCenterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isSubscribeOpen, setIsSubscribeOpen] = useState(false);
   const [isVersionPanelOpen, setIsVersionPanelOpen] = useState(false);
-  const [isOfflineDownloadPanelOpen, setIsOfflineDownloadPanelOpen] = useState(false);
+  const [isOfflineDownloadPanelOpen, setIsOfflineDownloadPanelOpen] =
+    useState(false);
   const [isNotificationPanelOpen, setIsNotificationPanelOpen] = useState(false);
   const [isFavoritesPanelOpen, setIsFavoritesPanelOpen] = useState(false);
   const [isEmailSettingsOpen, setIsEmailSettingsOpen] = useState(false);
   const [isDeviceManagementOpen, setIsDeviceManagementOpen] = useState(false);
   const [isEcoAppsOpen, setIsEcoAppsOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
-  const [isDownloadManagementOpen, setIsDownloadManagementOpen] = useState(false);
+  const [isDownloadManagementOpen, setIsDownloadManagementOpen] =
+    useState(false);
   const [authInfo, setAuthInfo] = useState<AuthInfo | null>(null);
   const [storageType, setStorageType] = useState<string>('localstorage');
+  const [displayStorageType, setDisplayStorageType] =
+    useState<string>('localstorage');
   const [mounted, setMounted] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -83,12 +89,25 @@ export const UserMenu: React.FC = () => {
   const [tvboxToken, setTvboxToken] = useState('');
   const [isResettingToken, setIsResettingToken] = useState(false);
   const [isLoadingSubscribeUrl, setIsLoadingSubscribeUrl] = useState(false);
-  const [subscribeAdFilterEnabled, setSubscribeAdFilterEnabled] = useState(false);
-  const [subscribeYellowFilterEnabled, setSubscribeYellowFilterEnabled] = useState(false);
+  const [subscribeAdFilterEnabled, setSubscribeAdFilterEnabled] =
+    useState(false);
+  const [subscribeYellowFilterEnabled, setSubscribeYellowFilterEnabled] =
+    useState(false);
 
   // Body 滚动锁定 - 使用 overflow 方式避免布局问题
   useEffect(() => {
-    if (isSettingsOpen || isChangePasswordOpen || isSubscribeOpen || isOfflineDownloadPanelOpen || isEmailSettingsOpen || isDeviceManagementOpen || isEcoAppsOpen || isReportOpen || isDownloadManagementOpen) {
+    if (
+      isProfileCenterOpen ||
+      isSettingsOpen ||
+      isChangePasswordOpen ||
+      isSubscribeOpen ||
+      isOfflineDownloadPanelOpen ||
+      isEmailSettingsOpen ||
+      isDeviceManagementOpen ||
+      isEcoAppsOpen ||
+      isReportOpen ||
+      isDownloadManagementOpen
+    ) {
       const body = document.body;
       const html = document.documentElement;
 
@@ -101,46 +120,71 @@ export const UserMenu: React.FC = () => {
       html.style.overflow = 'hidden';
 
       return () => {
-
         // 恢复所有原始样式
         body.style.overflow = originalBodyOverflow;
         html.style.overflow = originalHtmlOverflow;
       };
     }
-  }, [isSettingsOpen, isChangePasswordOpen, isSubscribeOpen, isOfflineDownloadPanelOpen, isEmailSettingsOpen, isDeviceManagementOpen, isEcoAppsOpen]);
+  }, [
+    isProfileCenterOpen,
+    isSettingsOpen,
+    isChangePasswordOpen,
+    isSubscribeOpen,
+    isOfflineDownloadPanelOpen,
+    isEmailSettingsOpen,
+    isDeviceManagementOpen,
+    isEcoAppsOpen,
+    isReportOpen,
+    isDownloadManagementOpen,
+  ]);
 
   // 设置相关状态
   const [defaultAggregateSearch, setDefaultAggregateSearch] = useState(true);
   const [doubanProxyUrl, setDoubanProxyUrl] = useState('');
   const [enableOptimization, setEnableOptimization] = useState(true);
+  const [preferStrategy, setPreferStrategy] = useState<'fast' | 'full'>('fast');
   const [speedTestTimeout, setSpeedTestTimeout] = useState(4000); // 测速超时时间（毫秒）
   const [fluidSearch, setFluidSearch] = useState(true);
   const [tmdbBackdropDisabled, setTmdbBackdropDisabled] = useState(false);
   const [enableTrailers, setEnableTrailers] = useState(false);
-  const [doubanDataSource, setDoubanDataSource] = useState('cmliussss-cdn-tencent');
-  const [doubanDataSourceBackup, setDoubanDataSourceBackup] = useState('direct');
-  const [doubanImageProxyType, setDoubanImageProxyType] = useState('cmliussss-cdn-tencent');
-  const [doubanImageProxyTypeBackup, setDoubanImageProxyTypeBackup] = useState('server');
+  const [doubanDataSource, setDoubanDataSource] = useState(
+    'cmliussss-cdn-tencent'
+  );
+  const [doubanDataSourceBackup, setDoubanDataSourceBackup] =
+    useState('direct');
+  const [doubanImageProxyType, setDoubanImageProxyType] = useState(
+    'cmliussss-cdn-tencent'
+  );
+  const [doubanImageProxyTypeBackup, setDoubanImageProxyTypeBackup] =
+    useState('server');
   const [doubanImageProxyUrl, setDoubanImageProxyUrl] = useState('');
   const [doubanProxyUrlBackup, setDoubanProxyUrlBackup] = useState('');
-  const [doubanImageProxyUrlBackup, setDoubanImageProxyUrlBackup] = useState('');
+  const [doubanImageProxyUrlBackup, setDoubanImageProxyUrlBackup] =
+    useState('');
   const [isDoubanDropdownOpen, setIsDoubanDropdownOpen] = useState(false);
-  const [isDoubanBackupDropdownOpen, setIsDoubanBackupDropdownOpen] = useState(false);
+  const [isDoubanBackupDropdownOpen, setIsDoubanBackupDropdownOpen] =
+    useState(false);
   const [isDoubanImageProxyDropdownOpen, setIsDoubanImageProxyDropdownOpen] =
     useState(false);
-  const [isDoubanImageProxyBackupDropdownOpen, setIsDoubanImageProxyBackupDropdownOpen] =
-    useState(false);
+  const [
+    isDoubanImageProxyBackupDropdownOpen,
+    setIsDoubanImageProxyBackupDropdownOpen,
+  ] = useState(false);
   const [bufferStrategy, setBufferStrategy] = useState('medium');
   const [nextEpisodePreCache, setNextEpisodePreCache] = useState(true);
-  const [nextEpisodeDanmakuPreload, setNextEpisodeDanmakuPreload] = useState(true);
+  const [nextEpisodeDanmakuPreload, setNextEpisodeDanmakuPreload] =
+    useState(true);
   const [disableAutoLoadDanmaku, setDisableAutoLoadDanmaku] = useState(false);
   const [danmakuMaxCount, setDanmakuMaxCount] = useState(0);
   const [danmakuHeatmapDisabled, setDanmakuHeatmapDisabled] = useState(false);
-  const [searchTraditionalToSimplified, setSearchTraditionalToSimplified] = useState(false);
+  const [searchTraditionalToSimplified, setSearchTraditionalToSimplified] =
+    useState(false);
   const [exactSearch, setExactSearch] = useState(true);
   const [maxConcurrentDownloads, setMaxConcurrentDownloads] = useState(6);
   const [downloadThreadsPerTask, setDownloadThreadsPerTask] = useState(6);
-  const [downloadMode, setDownloadMode] = useState<'browser' | 'filesystem'>('browser');
+  const [downloadMode, setDownloadMode] = useState<'browser' | 'filesystem'>(
+    'browser'
+  );
   const [filesystemSavePath, setFilesystemSavePath] = useState<string>('');
 
   // 邮件通知设置
@@ -148,6 +192,10 @@ export const UserMenu: React.FC = () => {
   const [emailNotifications, setEmailNotifications] = useState(false);
   const [emailSettingsLoading, setEmailSettingsLoading] = useState(false);
   const [emailSettingsSaving, setEmailSettingsSaving] = useState(false);
+  const [emailSettingsMessage, setEmailSettingsMessage] = useState('');
+  const [emailSettingsMessageType, setEmailSettingsMessageType] = useState<
+    'success' | 'error' | null
+  >(null);
 
   // 设备管理状态
   const [devices, setDevices] = useState<any[]>([]);
@@ -171,7 +219,9 @@ export const UserMenu: React.FC = () => {
   const [isDoubanSectionOpen, setIsDoubanSectionOpen] = useState(false);
 
   // TMDB 图片设置
-  const [tmdbImageBaseUrl, setTmdbImageBaseUrl] = useState('https://image.tmdb.org');
+  const [tmdbImageBaseUrl, setTmdbImageBaseUrl] = useState(
+    'https://image.tmdb.org'
+  );
   const [isUsageSectionOpen, setIsUsageSectionOpen] = useState(false);
   const [isDownloadSectionOpen, setIsDownloadSectionOpen] = useState(false);
   const [isBufferSectionOpen, setIsBufferSectionOpen] = useState(false);
@@ -186,6 +236,8 @@ export const UserMenu: React.FC = () => {
     order: number;
   }
 
+  type HomeBannerHeightScale = '1' | '1.5' | '2';
+
   const defaultHomeModules: HomeModule[] = [
     { id: 'hotMovies', name: '热门电影', enabled: true, order: 0 },
     { id: 'hotDuanju', name: '热播短剧', enabled: true, order: 1 },
@@ -195,9 +247,23 @@ export const UserMenu: React.FC = () => {
     { id: 'upcomingContent', name: '即将上映', enabled: true, order: 5 },
   ];
 
-  const [homeModules, setHomeModules] = useState<HomeModule[]>(defaultHomeModules);
+  const [homeModules, setHomeModules] =
+    useState<HomeModule[]>(defaultHomeModules);
   const [homeBannerEnabled, setHomeBannerEnabled] = useState(true);
-  const [homeContinueWatchingEnabled, setHomeContinueWatchingEnabled] = useState(true);
+  const [homeBannerHeightScale, setHomeBannerHeightScale] =
+    useState<HomeBannerHeightScale>('1');
+  const [homeContinueWatchingEnabled, setHomeContinueWatchingEnabled] =
+    useState(true);
+
+  const homeBannerHeightOptions: {
+    value: HomeBannerHeightScale;
+    label: string;
+    description: string;
+  }[] = [
+    { value: '1', label: '标准', description: '1x' },
+    { value: '1.5', label: '增高', description: '1.5x' },
+    { value: '2', label: '特高', description: '2x' },
+  ];
 
   // 豆瓣数据源选项
   const doubanDataSourceOptions = [
@@ -221,8 +287,14 @@ export const UserMenu: React.FC = () => {
     { value: 'cmliussss-cdn-ali', label: '豆瓣 CDN By CMLiussss（阿里云）' },
     { value: 'baidu', label: '百度图片代理' },
     { value: 'custom', label: '自定义代理' },
-    { value: 'direct', label: '直连（浏览器直接请求豆瓣，可能需要浏览器插件才能正常显示）' },
-    { value: 'img3', label: '豆瓣官方精品 CDN（阿里云，可能需要浏览器插件才能正常显示）' },
+    {
+      value: 'direct',
+      label: '直连（浏览器直接请求豆瓣，可能需要浏览器插件才能正常显示）',
+    },
+    {
+      value: 'img3',
+      label: '豆瓣官方精品 CDN（阿里云，可能需要浏览器插件才能正常显示）',
+    },
   ];
 
   // 缓冲策略选项
@@ -241,7 +313,10 @@ export const UserMenu: React.FC = () => {
 
   // 清除弹幕缓存相关状态
   const [isClearingCache, setIsClearingCache] = useState(false);
-  const [clearCacheMessage, setClearCacheMessage] = useState<string | null>(null);
+  const [clearCacheMessage, setClearCacheMessage] = useState<string | null>(
+    null
+  );
+  const [danmakuCacheUsage, setDanmakuCacheUsage] = useState('计算中...');
 
   // 确保组件已挂载
   useEffect(() => {
@@ -266,6 +341,22 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const formatCacheSize = useCallback((size: number) => {
+    if (size < 1024) return `${size} B`;
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`;
+    return `${(size / 1024 / 1024).toFixed(2)} MB`;
+  }, []);
+
+  const loadDanmakuCacheUsage = useCallback(async () => {
+    try {
+      const stats = await getDanmakuCacheStats();
+      setDanmakuCacheUsage(formatCacheSize(stats.totalSize));
+    } catch (error) {
+      console.error('获取弹幕缓存占用失败:', error);
+      setDanmakuCacheUsage('获取失败');
+    }
+  }, [formatCacheSize]);
+
   // 首次加载时检查未读通知数量（使用全局标记避免多个实例重复请求）
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -275,7 +366,10 @@ export const UserMenu: React.FC = () => {
     if (globalWindow.__loadingNotifications) {
       // 如果正在加载，等待加载完成后获取结果
       const checkInterval = setInterval(() => {
-        if (!globalWindow.__loadingNotifications && globalWindow.__unreadNotificationCount !== undefined) {
+        if (
+          !globalWindow.__loadingNotifications &&
+          globalWindow.__unreadNotificationCount !== undefined
+        ) {
           setUnreadCount(globalWindow.__unreadNotificationCount);
           clearInterval(checkInterval);
         }
@@ -296,6 +390,13 @@ export const UserMenu: React.FC = () => {
     });
   }, []);
 
+  useEffect(() => {
+    if (!mounted || !isSettingsOpen || !isDanmakuSectionOpen) return;
+    void (async () => {
+      await loadDanmakuCacheUsage();
+    })();
+  }, [loadDanmakuCacheUsage, mounted, isSettingsOpen, isDanmakuSectionOpen]);
+
   // 监听通知更新事件
   useEffect(() => {
     const handleNotificationsUpdated = () => {
@@ -308,14 +409,18 @@ export const UserMenu: React.FC = () => {
 
     window.addEventListener('notificationsUpdated', handleNotificationsUpdated);
     return () => {
-      window.removeEventListener('notificationsUpdated', handleNotificationsUpdated);
+      window.removeEventListener(
+        'notificationsUpdated',
+        handleNotificationsUpdated
+      );
     };
   }, []);
 
   // 从运行时配置读取订阅是否启用
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const enabled = (window as any).RUNTIME_CONFIG?.ENABLE_TVBOX_SUBSCRIBE || false;
+      const enabled =
+        (window as any).RUNTIME_CONFIG?.ENABLE_TVBOX_SUBSCRIBE || false;
       setSubscribeEnabled(enabled);
     }
   }, []);
@@ -331,7 +436,13 @@ export const UserMenu: React.FC = () => {
         const token = data.token;
         setTvboxToken(token);
 
-        setSubscribeUrl(buildSubscribeUrl(token, subscribeAdFilterEnabled, subscribeYellowFilterEnabled));
+        setSubscribeUrl(
+          buildSubscribeUrl(
+            token,
+            subscribeAdFilterEnabled,
+            subscribeYellowFilterEnabled
+          )
+        );
       }
     } catch (error) {
       console.error('获取订阅URL失败:', error);
@@ -361,11 +472,18 @@ export const UserMenu: React.FC = () => {
             const token = data.token;
             setTvboxToken(token);
 
-            setSubscribeUrl(buildSubscribeUrl(token, subscribeAdFilterEnabled, subscribeYellowFilterEnabled));
+            setSubscribeUrl(
+              buildSubscribeUrl(
+                token,
+                subscribeAdFilterEnabled,
+                subscribeYellowFilterEnabled
+              )
+            );
 
             if (messageEl) {
               messageEl.textContent = '订阅token已重置！';
-              messageEl.className = 'text-xs text-center text-green-600 dark:text-green-400 mt-2';
+              messageEl.className =
+                'text-xs text-center text-green-600 dark:text-green-400 mt-2';
               messageEl.classList.remove('hidden');
               setTimeout(() => {
                 messageEl.classList.add('hidden');
@@ -375,7 +493,8 @@ export const UserMenu: React.FC = () => {
             const data = await response.json();
             if (messageEl) {
               messageEl.textContent = data.error || '重置失败，请重试';
-              messageEl.className = 'text-xs text-center text-red-600 dark:text-red-400 mt-2';
+              messageEl.className =
+                'text-xs text-center text-red-600 dark:text-red-400 mt-2';
               messageEl.classList.remove('hidden');
             }
           }
@@ -384,7 +503,8 @@ export const UserMenu: React.FC = () => {
           const messageEl = document.getElementById('tvbox-token-message');
           if (messageEl) {
             messageEl.textContent = '重置失败，请重试';
-            messageEl.className = 'text-xs text-center text-red-600 dark:text-red-400 mt-2';
+            messageEl.className =
+              'text-xs text-center text-red-600 dark:text-red-400 mt-2';
             messageEl.classList.remove('hidden');
           }
         } finally {
@@ -394,7 +514,11 @@ export const UserMenu: React.FC = () => {
     });
   };
 
-  const buildSubscribeUrl = (token: string, adFilter: boolean, yellowFilter: boolean) => {
+  const buildSubscribeUrl = (
+    token: string,
+    adFilter: boolean,
+    yellowFilter: boolean
+  ) => {
     const currentOrigin = window.location.origin;
     const url = new URL('/api/tvbox/subscribe', currentOrigin);
     url.searchParams.set('token', token);
@@ -413,9 +537,11 @@ export const UserMenu: React.FC = () => {
       const auth = getAuthInfoFromBrowserCookie();
       setAuthInfo(auth);
 
-      const type =
-        (window as any).RUNTIME_CONFIG?.STORAGE_TYPE || 'localstorage';
+      const runtimeConfig = (window as any).RUNTIME_CONFIG || {};
+      const type = runtimeConfig.STORAGE_TYPE || 'localstorage';
+      const displayType = runtimeConfig.DISPLAY_STORAGE_TYPE || type;
       setStorageType(type);
+      setDisplayStorageType(displayType);
     }
   }, []);
 
@@ -431,7 +557,8 @@ export const UserMenu: React.FC = () => {
 
       const savedDoubanDataSource = localStorage.getItem('doubanDataSource');
       const defaultDoubanProxyType =
-        (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
+        (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE ||
+        'cmliussss-cdn-tencent';
       if (savedDoubanDataSource !== null) {
         setDoubanDataSource(savedDoubanDataSource);
       } else if (defaultDoubanProxyType) {
@@ -461,7 +588,8 @@ export const UserMenu: React.FC = () => {
         'doubanImageProxyType'
       );
       const defaultDoubanImageProxyType =
-        (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
+        (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
+        'cmliussss-cdn-tencent';
       if (savedDoubanImageProxyType !== null) {
         setDoubanImageProxyType(savedDoubanImageProxyType);
       } else if (defaultDoubanImageProxyType) {
@@ -482,7 +610,9 @@ export const UserMenu: React.FC = () => {
       const savedDoubanImageProxyTypeBackup = localStorage.getItem(
         'doubanImageProxyTypeBackup'
       );
-      setDoubanImageProxyTypeBackup(savedDoubanImageProxyTypeBackup || 'server');
+      setDoubanImageProxyTypeBackup(
+        savedDoubanImageProxyTypeBackup || 'server'
+      );
 
       const savedDoubanImageProxyUrlBackup = localStorage.getItem(
         'doubanImageProxyUrlBackup'
@@ -500,6 +630,11 @@ export const UserMenu: React.FC = () => {
         setEnableOptimization(JSON.parse(savedEnableOptimization));
       }
 
+      const savedPreferStrategy = localStorage.getItem('preferStrategy');
+      if (savedPreferStrategy === 'fast' || savedPreferStrategy === 'full') {
+        setPreferStrategy(savedPreferStrategy);
+      }
+
       const savedSpeedTestTimeout = localStorage.getItem('speedTestTimeout');
       if (savedSpeedTestTimeout !== null) {
         setSpeedTestTimeout(Number(savedSpeedTestTimeout));
@@ -514,7 +649,9 @@ export const UserMenu: React.FC = () => {
         setFluidSearch(defaultFluidSearch);
       }
 
-      const savedTmdbBackdropDisabled = localStorage.getItem('tmdb_backdrop_disabled');
+      const savedTmdbBackdropDisabled = localStorage.getItem(
+        'tmdb_backdrop_disabled'
+      );
       if (savedTmdbBackdropDisabled !== null) {
         setTmdbBackdropDisabled(savedTmdbBackdropDisabled === 'true');
       }
@@ -529,19 +666,29 @@ export const UserMenu: React.FC = () => {
         setBufferStrategy(savedBufferStrategy);
       }
 
-      const savedNextEpisodePreCache = localStorage.getItem('nextEpisodePreCache');
+      const savedNextEpisodePreCache = localStorage.getItem(
+        'nextEpisodePreCache'
+      );
       if (savedNextEpisodePreCache !== null) {
         setNextEpisodePreCache(savedNextEpisodePreCache === 'true');
       }
 
-      const savedNextEpisodeDanmakuPreload = localStorage.getItem('nextEpisodeDanmakuPreload');
+      const savedNextEpisodeDanmakuPreload = localStorage.getItem(
+        'nextEpisodeDanmakuPreload'
+      );
       if (savedNextEpisodeDanmakuPreload !== null) {
         setNextEpisodeDanmakuPreload(savedNextEpisodeDanmakuPreload === 'true');
       }
 
-      const savedDisableAutoLoadDanmaku = localStorage.getItem('disableAutoLoadDanmaku');
+      const savedDisableAutoLoadDanmaku = localStorage.getItem(
+        'disableAutoLoadDanmaku'
+      );
       if (savedDisableAutoLoadDanmaku !== null) {
         setDisableAutoLoadDanmaku(savedDisableAutoLoadDanmaku === 'true');
+      } else {
+        const runtimeDefault =
+          (window as any).RUNTIME_CONFIG?.DANMAKU_AUTO_LOAD_DEFAULT !== false;
+        setDisableAutoLoadDanmaku(!runtimeDefault);
       }
 
       const savedDanmakuMaxCount = localStorage.getItem('danmakuMaxCount');
@@ -549,7 +696,9 @@ export const UserMenu: React.FC = () => {
         setDanmakuMaxCount(parseInt(savedDanmakuMaxCount, 10));
       }
 
-      const savedDanmakuHeatmapDisabled = localStorage.getItem('danmaku_heatmap_disabled');
+      const savedDanmakuHeatmapDisabled = localStorage.getItem(
+        'danmaku_heatmap_disabled'
+      );
       if (savedDanmakuHeatmapDisabled !== null) {
         setDanmakuHeatmapDisabled(savedDanmakuHeatmapDisabled === 'true');
       }
@@ -559,9 +708,24 @@ export const UserMenu: React.FC = () => {
         setHomeBannerEnabled(savedHomeBannerEnabled === 'true');
       }
 
-      const savedHomeContinueWatchingEnabled = localStorage.getItem('homeContinueWatchingEnabled');
+      const savedHomeBannerHeightScale = localStorage.getItem(
+        'homeBannerHeightScale'
+      );
+      if (
+        savedHomeBannerHeightScale === '1' ||
+        savedHomeBannerHeightScale === '1.5' ||
+        savedHomeBannerHeightScale === '2'
+      ) {
+        setHomeBannerHeightScale(savedHomeBannerHeightScale);
+      }
+
+      const savedHomeContinueWatchingEnabled = localStorage.getItem(
+        'homeContinueWatchingEnabled'
+      );
       if (savedHomeContinueWatchingEnabled !== null) {
-        setHomeContinueWatchingEnabled(savedHomeContinueWatchingEnabled === 'true');
+        setHomeContinueWatchingEnabled(
+          savedHomeContinueWatchingEnabled === 'true'
+        );
       }
 
       // 加载首页模块配置
@@ -575,9 +739,13 @@ export const UserMenu: React.FC = () => {
       }
 
       // 加载搜索繁体转简体设置
-      const savedSearchTraditionalToSimplified = localStorage.getItem('searchTraditionalToSimplified');
+      const savedSearchTraditionalToSimplified = localStorage.getItem(
+        'searchTraditionalToSimplified'
+      );
       if (savedSearchTraditionalToSimplified !== null) {
-        setSearchTraditionalToSimplified(savedSearchTraditionalToSimplified === 'true');
+        setSearchTraditionalToSimplified(
+          savedSearchTraditionalToSimplified === 'true'
+        );
       }
 
       // 加载精确搜索设置
@@ -587,25 +755,33 @@ export const UserMenu: React.FC = () => {
       }
 
       // 加载最大同时下载限制设置
-      const savedMaxConcurrentDownloads = localStorage.getItem('maxConcurrentDownloads');
+      const savedMaxConcurrentDownloads = localStorage.getItem(
+        'maxConcurrentDownloads'
+      );
       if (savedMaxConcurrentDownloads !== null) {
         setMaxConcurrentDownloads(Number(savedMaxConcurrentDownloads));
       }
 
       // 加载单任务线程数设置
-      const savedDownloadThreadsPerTask = localStorage.getItem('downloadThreadsPerTask');
+      const savedDownloadThreadsPerTask = localStorage.getItem(
+        'downloadThreadsPerTask'
+      );
       if (savedDownloadThreadsPerTask !== null) {
         setDownloadThreadsPerTask(Number(savedDownloadThreadsPerTask));
       }
 
       // 加载下载模式设置
       const savedDownloadMode = localStorage.getItem('downloadMode');
-      if (savedDownloadMode === 'browser' || savedDownloadMode === 'filesystem') {
+      if (
+        savedDownloadMode === 'browser' ||
+        savedDownloadMode === 'filesystem'
+      ) {
         setDownloadMode(savedDownloadMode);
       }
 
       // 加载保存路径设置
-      const savedFilesystemSavePath = localStorage.getItem('filesystemSavePath');
+      const savedFilesystemSavePath =
+        localStorage.getItem('filesystemSavePath');
       if (savedFilesystemSavePath !== null) {
         setFilesystemSavePath(savedFilesystemSavePath);
       }
@@ -615,6 +791,8 @@ export const UserMenu: React.FC = () => {
   // 加载邮件通知设置
   const loadEmailSettings = async () => {
     setEmailSettingsLoading(true);
+    setEmailSettingsMessage('');
+    setEmailSettingsMessageType(null);
     try {
       const response = await fetch('/api/user/email-settings');
       if (response.ok) {
@@ -632,6 +810,8 @@ export const UserMenu: React.FC = () => {
   // 保存邮件通知设置
   const handleSaveEmailSettings = async () => {
     setEmailSettingsSaving(true);
+    setEmailSettingsMessage('');
+    setEmailSettingsMessageType(null);
     try {
       const response = await fetch('/api/user/email-settings', {
         method: 'POST',
@@ -642,32 +822,22 @@ export const UserMenu: React.FC = () => {
         }),
       });
 
-      const messageEl = document.getElementById('email-settings-message');
       if (response.ok) {
-        if (messageEl) {
-          messageEl.textContent = '保存成功！';
-          messageEl.className = 'text-xs text-center text-green-600 dark:text-green-400';
-          messageEl.classList.remove('hidden');
-          setTimeout(() => {
-            messageEl.classList.add('hidden');
-          }, 3000);
-        }
+        setEmailSettingsMessage('保存成功！');
+        setEmailSettingsMessageType('success');
+        setTimeout(() => {
+          setEmailSettingsMessage('');
+          setEmailSettingsMessageType(null);
+        }, 3000);
       } else {
         const data = await response.json();
-        if (messageEl) {
-          messageEl.textContent = data.error || '保存失败';
-          messageEl.className = 'text-xs text-center text-red-600 dark:text-red-400';
-          messageEl.classList.remove('hidden');
-        }
+        setEmailSettingsMessage(data.error || '保存失败');
+        setEmailSettingsMessageType('error');
       }
     } catch (error) {
       console.error('保存邮件设置失败:', error);
-      const messageEl = document.getElementById('email-settings-message');
-      if (messageEl) {
-        messageEl.textContent = '保存失败，请重试';
-        messageEl.className = 'text-xs text-center text-red-600 dark:text-red-400';
-        messageEl.classList.remove('hidden');
-      }
+      setEmailSettingsMessage('保存失败，请重试');
+      setEmailSettingsMessageType('error');
     } finally {
       setEmailSettingsSaving(false);
     }
@@ -726,7 +896,8 @@ export const UserMenu: React.FC = () => {
     setConfirmDialog({
       isOpen: true,
       title: '登出所有设备',
-      message: '确定要登出所有设备吗？这将清除所有设备的登录状态（包括当前设备）。',
+      message:
+        '确定要登出所有设备吗？这将清除所有设备的登录状态（包括当前设备）。',
       onConfirm: async () => {
         setConfirmDialog({ ...confirmDialog, isOpen: false });
         try {
@@ -752,7 +923,11 @@ export const UserMenu: React.FC = () => {
   const getDeviceIcon = (deviceInfo: string) => {
     const info = deviceInfo.toLowerCase();
 
-    if (info.includes('mobile') || info.includes('iphone') || info.includes('android')) {
+    if (
+      info.includes('mobile') ||
+      info.includes('iphone') ||
+      info.includes('android')
+    ) {
       return Smartphone;
     }
 
@@ -895,11 +1070,22 @@ export const UserMenu: React.FC = () => {
       console.error('复制失败:', error);
     }
   };
-  
+
   useEffect(() => {
     if (!tvboxToken || !isSubscribeOpen) return;
-    setSubscribeUrl(buildSubscribeUrl(tvboxToken, subscribeAdFilterEnabled, subscribeYellowFilterEnabled));
-  }, [tvboxToken, subscribeAdFilterEnabled, subscribeYellowFilterEnabled, isSubscribeOpen]);
+    setSubscribeUrl(
+      buildSubscribeUrl(
+        tvboxToken,
+        subscribeAdFilterEnabled,
+        subscribeYellowFilterEnabled
+      )
+    );
+  }, [
+    tvboxToken,
+    subscribeAdFilterEnabled,
+    subscribeYellowFilterEnabled,
+    isSubscribeOpen,
+  ]);
 
   const handleSubmitChangePassword = async () => {
     setPasswordError('');
@@ -976,6 +1162,13 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const handlePreferStrategyChange = (value: 'fast' | 'full') => {
+    setPreferStrategy(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('preferStrategy', value);
+    }
+  };
+
   const handleSpeedTestTimeoutChange = (value: number) => {
     setSpeedTestTimeout(value);
     if (typeof window !== 'undefined') {
@@ -999,11 +1192,16 @@ export const UserMenu: React.FC = () => {
 
   const handleDownloadModeChange = (mode: 'browser' | 'filesystem') => {
     // 如果选择 filesystem 模式，先检测浏览器是否支持
-    if (mode === 'filesystem' && typeof window !== 'undefined' && !('showDirectoryPicker' in window)) {
+    if (
+      mode === 'filesystem' &&
+      typeof window !== 'undefined' &&
+      !('showDirectoryPicker' in window)
+    ) {
       setConfirmDialog({
         isOpen: true,
         title: '浏览器不支持',
-        message: '您的浏览器不支持 File System Access API，请使用 Chrome 86+ 或 Edge 86+',
+        message:
+          '您的浏览器不支持 File System Access API，请使用 Chrome 86+ 或 Edge 86+',
         onConfirm: () => {
           setConfirmDialog({ ...confirmDialog, isOpen: false });
         },
@@ -1041,18 +1239,28 @@ export const UserMenu: React.FC = () => {
 
           // 创建 activeTasks 表（如果不存在）
           if (!db.objectStoreNames.contains('activeTasks')) {
-            const activeStore = db.createObjectStore('activeTasks', { keyPath: 'id' });
+            const activeStore = db.createObjectStore('activeTasks', {
+              keyPath: 'id',
+            });
             activeStore.createIndex('status', 'status', { unique: false });
-            activeStore.createIndex('createdAt', 'createdAt', { unique: false });
+            activeStore.createIndex('createdAt', 'createdAt', {
+              unique: false,
+            });
           }
 
           // 创建 completedTasks 表（如果不存在）
           if (!db.objectStoreNames.contains('completedTasks')) {
-            const completedStore = db.createObjectStore('completedTasks', { keyPath: 'id' });
+            const completedStore = db.createObjectStore('completedTasks', {
+              keyPath: 'id',
+            });
             completedStore.createIndex('source', 'source', { unique: false });
             completedStore.createIndex('videoId', 'videoId', { unique: false });
-            completedStore.createIndex('completedAt', 'completedAt', { unique: false });
-            completedStore.createIndex('sourceVideoId', ['source', 'videoId'], { unique: false });
+            completedStore.createIndex('completedAt', 'completedAt', {
+              unique: false,
+            });
+            completedStore.createIndex('sourceVideoId', ['source', 'videoId'], {
+              unique: false,
+            });
           }
         };
 
@@ -1236,6 +1444,14 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const handleHomeBannerHeightScaleChange = (value: HomeBannerHeightScale) => {
+    setHomeBannerHeightScale(value);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('homeBannerHeightScale', value);
+      window.dispatchEvent(new CustomEvent('homeModulesUpdated'));
+    }
+  };
+
   const handleHomeContinueWatchingToggle = (value: boolean) => {
     setHomeContinueWatchingEnabled(value);
     if (typeof window !== 'undefined') {
@@ -1246,7 +1462,7 @@ export const UserMenu: React.FC = () => {
 
   // 首页模块配置处理函数
   const handleHomeModuleToggle = (id: string, enabled: boolean) => {
-    const updatedModules = homeModules.map(module =>
+    const updatedModules = homeModules.map((module) =>
       module.id === id ? { ...module, enabled } : module
     );
     setHomeModules(updatedModules);
@@ -1312,11 +1528,13 @@ export const UserMenu: React.FC = () => {
 
   const handleResetSettings = () => {
     const defaultDoubanProxyType =
-      (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE || 'cmliussss-cdn-tencent';
+      (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY_TYPE ||
+      'cmliussss-cdn-tencent';
     const defaultDoubanProxy =
       (window as any).RUNTIME_CONFIG?.DOUBAN_PROXY || '';
     const defaultDoubanImageProxyType =
-      (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE || 'cmliussss-cdn-tencent';
+      (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY_TYPE ||
+      'cmliussss-cdn-tencent';
     const defaultDoubanImageProxyUrl =
       (window as any).RUNTIME_CONFIG?.DOUBAN_IMAGE_PROXY || '';
     const defaultFluidSearch =
@@ -1324,6 +1542,7 @@ export const UserMenu: React.FC = () => {
 
     setDefaultAggregateSearch(true);
     setEnableOptimization(true);
+    setPreferStrategy('fast');
     setFluidSearch(defaultFluidSearch);
     setTmdbBackdropDisabled(false);
     setEnableTrailers(false);
@@ -1339,8 +1558,13 @@ export const UserMenu: React.FC = () => {
     setBufferStrategy('medium');
     setNextEpisodePreCache(true);
     setNextEpisodeDanmakuPreload(true);
-    setDisableAutoLoadDanmaku(false);
+    const defaultDanmakuAutoLoad =
+      (typeof window !== 'undefined' &&
+        (window as any).RUNTIME_CONFIG?.DANMAKU_AUTO_LOAD_DEFAULT !== false) ||
+      false;
+    setDisableAutoLoadDanmaku(!defaultDanmakuAutoLoad);
     setHomeBannerEnabled(true);
+    setHomeBannerHeightScale('1');
     setHomeContinueWatchingEnabled(true);
     setHomeModules(defaultHomeModules);
     setSearchTraditionalToSimplified(false);
@@ -1348,6 +1572,7 @@ export const UserMenu: React.FC = () => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('defaultAggregateSearch', JSON.stringify(true));
       localStorage.setItem('enableOptimization', JSON.stringify(true));
+      localStorage.setItem('preferStrategy', 'fast');
       localStorage.setItem('fluidSearch', JSON.stringify(defaultFluidSearch));
       localStorage.setItem('liveDirectConnect', JSON.stringify(false));
       localStorage.setItem('tmdb_backdrop_disabled', 'false');
@@ -1364,10 +1589,14 @@ export const UserMenu: React.FC = () => {
       localStorage.setItem('bufferStrategy', 'medium');
       localStorage.setItem('nextEpisodePreCache', 'true');
       localStorage.setItem('nextEpisodeDanmakuPreload', 'true');
-      localStorage.setItem('disableAutoLoadDanmaku', 'false');
+      localStorage.setItem(
+        'disableAutoLoadDanmaku',
+        String(!defaultDanmakuAutoLoad)
+      );
       localStorage.setItem('danmakuMaxCount', '0');
       localStorage.setItem('danmaku_heatmap_disabled', 'false');
       localStorage.setItem('homeBannerEnabled', 'true');
+      localStorage.setItem('homeBannerHeightScale', '1');
       localStorage.setItem('homeContinueWatchingEnabled', 'true');
       localStorage.setItem('homeModules', JSON.stringify(defaultHomeModules));
       localStorage.setItem('searchTraditionalToSimplified', 'false');
@@ -1383,6 +1612,7 @@ export const UserMenu: React.FC = () => {
     try {
       await clearAllDanmakuCache();
       setClearCacheMessage('弹幕缓存已清除成功！');
+      setDanmakuCacheUsage('0 B');
       console.log('弹幕缓存已清除');
 
       // 3秒后自动清除提示
@@ -1431,6 +1661,24 @@ export const UserMenu: React.FC = () => {
     }
   };
 
+  const currentUsername = authInfo?.username || 'default';
+  const currentRole = authInfo?.role || 'user';
+  const currentRoleText = getRoleText(currentRole);
+  const shouldShowRoleBadge = currentRole !== 'user';
+  const avatarText = currentUsername.trim().charAt(0).toUpperCase() || 'D';
+
+  const roleBadgeClassName =
+    currentRole === 'owner'
+      ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
+      : currentRole === 'admin'
+      ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
+      : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
+
+  const handleOpenProfileCenter = () => {
+    setIsOpen(false);
+    setIsProfileCenterOpen(true);
+  };
+
   // 菜单面板内容
   const menuPanel = (
     <>
@@ -1443,62 +1691,37 @@ export const UserMenu: React.FC = () => {
       {/* 菜单面板 */}
       <div className='fixed top-14 right-4 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-xl z-[1001] border border-gray-200/50 dark:border-gray-700/50 overflow-hidden select-none'>
         {/* 用户信息区域 */}
-        <div className='px-3 py-2.5 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800 dark:to-gray-800/50'>
-          <div className='space-y-1'>
-            <div className='flex items-center justify-between'>
-              <div className='flex items-center gap-0.5'>
-                <span className='text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider'>
-                  当前用户
-                </span>
-                {/* 邮件设置图标按钮 */}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsOpen(false);
-                    setIsEmailSettingsOpen(true);
-                    // 懒加载:打开面板时才请求邮件设置
-                    loadEmailSettings();
-                  }}
-                  className='p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors'
-                  title='邮件通知设置'
-                >
-                  <Mail className='w-3 h-3 text-gray-500 dark:text-gray-400' />
-                </button>
-                {/* 设备管理图标按钮 */}
-                {storageType !== 'localstorage' && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setIsOpen(false);
-                      setIsDeviceManagementOpen(true);
-                      // 懒加载:打开面板时才请求设备列表
-                      loadDevices();
-                    }}
-                    className='p-0.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors'
-                    title='设备管理'
+        <div className='px-3 py-1 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-gray-50 to-gray-100/50 dark:from-gray-800 dark:to-gray-800/50'>
+          <div className='flex items-start justify-between gap-3'>
+            <button
+              onClick={handleOpenProfileCenter}
+              className='flex items-center gap-3 rounded-xl px-2 py-1 text-left hover:bg-white/70 dark:hover:bg-gray-700/40 transition-colors'
+            >
+              <div className='relative flex h-11 w-11 items-center justify-center rounded-full bg-blue-500 text-lg font-semibold text-white shadow-sm'>
+                <span>{avatarText}</span>
+                {shouldShowRoleBadge && (
+                  <span
+                    className={`absolute left-1/2 top-[calc(100%-6px)] z-10 -translate-x-1/2 inline-flex min-w-[26px] items-center justify-center whitespace-nowrap rounded-full px-1.5 py-[2px] text-[8px] leading-none font-medium shadow-sm ${roleBadgeClassName}`}
                   >
-                    <Monitor className='w-3 h-3 text-gray-500 dark:text-gray-400' />
-                  </button>
+                    {currentRoleText}
+                  </span>
                 )}
               </div>
-              <span
-                className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium ${(authInfo?.role || 'user') === 'owner'
-                  ? 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300'
-                  : (authInfo?.role || 'user') === 'admin'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300'
-                    : 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                  }`}
-              >
-                {getRoleText(authInfo?.role || 'user')}
-              </span>
-            </div>
-            <div className='flex items-center justify-between'>
-              <div className='font-semibold text-gray-900 dark:text-gray-100 text-sm truncate'>
-                {authInfo?.username || 'default'}
+              <div className='min-w-0'>
+                <span className='block max-w-[84px] truncate text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none'>
+                  {currentUsername}
+                </span>
               </div>
+            </button>
+
+            <div className='pt-1 text-right'>
               <div className='text-[10px] text-gray-400 dark:text-gray-500'>
-                数据存储：
-                {storageType === 'localstorage' ? '本地' : storageType}
+                <div>数据存储</div>
+                <div className='mt-0.5'>
+                  {displayStorageType === 'localstorage'
+                    ? '本地'
+                    : displayStorageType}
+                </div>
               </div>
             </div>
           </div>
@@ -1569,17 +1792,6 @@ export const UserMenu: React.FC = () => {
             </button>
           )}
 
-          {/* 修改密码按钮 */}
-          {showChangePassword && (
-            <button
-              onClick={handleChangePassword}
-              className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
-            >
-              <KeyRound className='w-4 h-4 text-gray-500 dark:text-gray-400' />
-              <span className='font-medium'>修改密码</span>
-            </button>
-          )}
-
           {/* 订阅按钮 */}
           {subscribeEnabled && (
             <button
@@ -1632,12 +1844,13 @@ export const UserMenu: React.FC = () => {
                 updateStatus &&
                 updateStatus !== UpdateStatus.FETCH_FAILED && (
                   <div
-                    className={`w-2 h-2 rounded-full -translate-y-2 ${updateStatus === UpdateStatus.HAS_UPDATE
-                      ? 'bg-yellow-500'
-                      : updateStatus === UpdateStatus.NO_UPDATE
+                    className={`w-2 h-2 rounded-full -translate-y-2 ${
+                      updateStatus === UpdateStatus.HAS_UPDATE
+                        ? 'bg-yellow-500'
+                        : updateStatus === UpdateStatus.NO_UPDATE
                         ? 'bg-green-400'
                         : ''
-                      }`}
+                    }`}
                   ></div>
                 )}
             </div>
@@ -1668,9 +1881,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 设置面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] flex flex-col'
-      >
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-xl max-h-[90vh] bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] flex flex-col'>
         {/* 内容容器 - 独立的滚动区域 */}
         <div
           className='flex-1 px-4 py-6 md:p-6 overflow-y-auto'
@@ -1739,7 +1950,9 @@ export const UserMenu: React.FC = () => {
                       {/* 自定义下拉选择框 */}
                       <button
                         type='button'
-                        onClick={() => setIsDoubanDropdownOpen(!isDoubanDropdownOpen)}
+                        onClick={() =>
+                          setIsDoubanDropdownOpen(!isDoubanDropdownOpen)
+                        }
                         className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
                       >
                         {
@@ -1752,8 +1965,9 @@ export const UserMenu: React.FC = () => {
                       {/* 下拉箭头 */}
                       <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                         <ChevronDown
-                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isDoubanDropdownOpen ? 'rotate-180' : ''
-                            }`}
+                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                            isDoubanDropdownOpen ? 'rotate-180' : ''
+                          }`}
                         />
                       </div>
 
@@ -1768,10 +1982,11 @@ export const UserMenu: React.FC = () => {
                                 handleDoubanDataSourceChange(option.value);
                                 setIsDoubanDropdownOpen(false);
                               }}
-                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${doubanDataSource === option.value
-                                ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                                : 'text-gray-900 dark:text-gray-100'
-                                }`}
+                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                                doubanDataSource === option.value
+                                  ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                  : 'text-gray-900 dark:text-gray-100'
+                              }`}
                             >
                               <span className='truncate'>{option.label}</span>
                               {doubanDataSource === option.value && (
@@ -1789,7 +2004,10 @@ export const UserMenu: React.FC = () => {
                         <button
                           type='button'
                           onClick={() =>
-                            window.open(getThanksInfo(doubanDataSource)!.url, '_blank')
+                            window.open(
+                              getThanksInfo(doubanDataSource)!.url,
+                              '_blank'
+                            )
                           }
                           className='flex items-center justify-center gap-1.5 w-full px-3 text-xs text-gray-500 dark:text-gray-400 cursor-pointer'
                         >
@@ -1818,7 +2036,9 @@ export const UserMenu: React.FC = () => {
                         className='w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 shadow-sm hover:border-gray-400 dark:hover:border-gray-500'
                         placeholder='例如: https://proxy.example.com/fetch?url='
                         value={doubanProxyUrl}
-                        onChange={(e) => handleDoubanProxyUrlChange(e.target.value)}
+                        onChange={(e) =>
+                          handleDoubanProxyUrlChange(e.target.value)
+                        }
                       />
                       {!doubanProxyUrl.trim() && (
                         <p className='text-xs text-amber-600 dark:text-amber-400 mt-1'>
@@ -1844,7 +2064,9 @@ export const UserMenu: React.FC = () => {
                       <button
                         type='button'
                         onClick={() =>
-                          setIsDoubanBackupDropdownOpen(!isDoubanBackupDropdownOpen)
+                          setIsDoubanBackupDropdownOpen(
+                            !isDoubanBackupDropdownOpen
+                          )
                         }
                         className='w-full px-3 py-2.5 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-all duration-200 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm hover:border-gray-400 dark:hover:border-gray-500 text-left'
                       >
@@ -1856,8 +2078,9 @@ export const UserMenu: React.FC = () => {
                       </button>
                       <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                         <ChevronDown
-                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isDoubanBackupDropdownOpen ? 'rotate-180' : ''
-                            }`}
+                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                            isDoubanBackupDropdownOpen ? 'rotate-180' : ''
+                          }`}
                         />
                       </div>
                       {isDoubanBackupDropdownOpen && (
@@ -1867,13 +2090,16 @@ export const UserMenu: React.FC = () => {
                               key={option.value}
                               type='button'
                               onClick={() => {
-                                handleDoubanDataSourceBackupChange(option.value);
+                                handleDoubanDataSourceBackupChange(
+                                  option.value
+                                );
                                 setIsDoubanBackupDropdownOpen(false);
                               }}
-                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${doubanDataSourceBackup === option.value
-                                ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                                : 'text-gray-900 dark:text-gray-100'
-                                }`}
+                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                                doubanDataSourceBackup === option.value
+                                  ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                  : 'text-gray-900 dark:text-gray-100'
+                              }`}
                             >
                               <span className='truncate'>{option.label}</span>
                               {doubanDataSourceBackup === option.value && (
@@ -1926,7 +2152,10 @@ export const UserMenu: React.FC = () => {
                         选择获取豆瓣图片的方式
                       </p>
                     </div>
-                    <div className='relative' data-dropdown='douban-image-proxy'>
+                    <div
+                      className='relative'
+                      data-dropdown='douban-image-proxy'
+                    >
                       {/* 自定义下拉选择框 */}
                       <button
                         type='button'
@@ -1947,8 +2176,9 @@ export const UserMenu: React.FC = () => {
                       {/* 下拉箭头 */}
                       <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                         <ChevronDown
-                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isDoubanDropdownOpen ? 'rotate-180' : ''
-                            }`}
+                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                            isDoubanDropdownOpen ? 'rotate-180' : ''
+                          }`}
                         />
                       </div>
 
@@ -1963,10 +2193,11 @@ export const UserMenu: React.FC = () => {
                                 handleDoubanImageProxyTypeChange(option.value);
                                 setIsDoubanImageProxyDropdownOpen(false);
                               }}
-                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${doubanImageProxyType === option.value
-                                ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                                : 'text-gray-900 dark:text-gray-100'
-                                }`}
+                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                                doubanImageProxyType === option.value
+                                  ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                  : 'text-gray-900 dark:text-gray-100'
+                              }`}
                             >
                               <span className='truncate'>{option.label}</span>
                               {doubanImageProxyType === option.value && (
@@ -2052,14 +2283,18 @@ export const UserMenu: React.FC = () => {
                       >
                         {
                           doubanImageProxyTypeOptions.find(
-                            (option) => option.value === doubanImageProxyTypeBackup
+                            (option) =>
+                              option.value === doubanImageProxyTypeBackup
                           )?.label
                         }
                       </button>
                       <div className='absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none'>
                         <ChevronDown
-                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${isDoubanImageProxyBackupDropdownOpen ? 'rotate-180' : ''
-                            }`}
+                          className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform duration-200 ${
+                            isDoubanImageProxyBackupDropdownOpen
+                              ? 'rotate-180'
+                              : ''
+                          }`}
                         />
                       </div>
                       {isDoubanImageProxyBackupDropdownOpen && (
@@ -2069,13 +2304,16 @@ export const UserMenu: React.FC = () => {
                               key={option.value}
                               type='button'
                               onClick={() => {
-                                handleDoubanImageProxyTypeBackupChange(option.value);
+                                handleDoubanImageProxyTypeBackupChange(
+                                  option.value
+                                );
                                 setIsDoubanImageProxyBackupDropdownOpen(false);
                               }}
-                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${doubanImageProxyTypeBackup === option.value
-                                ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
-                                : 'text-gray-900 dark:text-gray-100'
-                                }`}
+                              className={`w-full px-3 py-2.5 text-left text-sm transition-colors duration-150 flex items-center justify-between hover:bg-gray-100 dark:hover:bg-gray-700 ${
+                                doubanImageProxyTypeBackup === option.value
+                                  ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400'
+                                  : 'text-gray-900 dark:text-gray-100'
+                              }`}
                             >
                               <span className='truncate'>{option.label}</span>
                               {doubanImageProxyTypeBackup === option.value && (
@@ -2177,7 +2415,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={defaultAggregateSearch}
-                          onChange={(e) => handleAggregateToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleAggregateToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2201,7 +2441,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={enableOptimization}
-                          onChange={(e) => handleOptimizationToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleOptimizationToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2212,6 +2454,38 @@ export const UserMenu: React.FC = () => {
                   {/* 测速超时设置 */}
                   {enableOptimization && (
                     <div className='ml-4 mt-2 space-y-2'>
+                      <div className='space-y-2'>
+                        <div className='flex items-center justify-between gap-3'>
+                          <span className='text-xs text-gray-600 dark:text-gray-400'>
+                            优选策略
+                          </span>
+                          <div className='inline-flex rounded-lg border border-gray-200 bg-gray-100 p-1 dark:border-gray-700 dark:bg-gray-800'>
+                            <button
+                              type='button'
+                              onClick={() => handlePreferStrategyChange('fast')}
+                              className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all ${
+                                preferStrategy === 'fast'
+                                  ? 'bg-white text-green-600 shadow-sm dark:bg-gray-700 dark:text-green-400'
+                                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                              }`}
+                            >
+                              快速优选
+                            </button>
+                            <button
+                              type='button'
+                              onClick={() => handlePreferStrategyChange('full')}
+                              className={`rounded-md px-4 py-1.5 text-xs font-medium transition-all ${
+                                preferStrategy === 'full'
+                                  ? 'bg-white text-green-600 shadow-sm dark:bg-gray-700 dark:text-green-400'
+                                  : 'text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200'
+                              }`}
+                            >
+                              全量优选
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                       <div className='flex items-center justify-between'>
                         <span className='text-xs text-gray-600 dark:text-gray-400'>
                           换源面板测速超时
@@ -2227,35 +2501,57 @@ export const UserMenu: React.FC = () => {
                           max='30000'
                           step='1000'
                           value={speedTestTimeout}
-                          onChange={(e) => handleSpeedTestTimeoutChange(Number(e.target.value))}
+                          onChange={(e) =>
+                            handleSpeedTestTimeoutChange(Number(e.target.value))
+                          }
                           className='flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700'
                           style={{
-                            background: `linear-gradient(to right, #10b981 0%, #10b981 ${((speedTestTimeout - 4000) / (30000 - 4000)) * 100}%, #e5e7eb ${((speedTestTimeout - 4000) / (30000 - 4000)) * 100}%, #e5e7eb 100%)`
+                            background: `linear-gradient(to right, #10b981 0%, #10b981 ${
+                              ((speedTestTimeout - 4000) / (30000 - 4000)) * 100
+                            }%, #e5e7eb ${
+                              ((speedTestTimeout - 4000) / (30000 - 4000)) * 100
+                            }%, #e5e7eb 100%)`,
                           }}
                         />
                       </div>
                       <div className='flex justify-between text-xs text-gray-500 dark:text-gray-400'>
                         <button
                           onClick={() => handleSpeedTestTimeoutChange(4000)}
-                          className={`px-2 py-0.5 rounded ${speedTestTimeout === 4000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                          className={`px-2 py-0.5 rounded ${
+                            speedTestTimeout === 4000
+                              ? 'bg-green-500 text-white'
+                              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                          }`}
                         >
                           4秒
                         </button>
                         <button
                           onClick={() => handleSpeedTestTimeoutChange(10000)}
-                          className={`px-2 py-0.5 rounded ${speedTestTimeout === 10000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                          className={`px-2 py-0.5 rounded ${
+                            speedTestTimeout === 10000
+                              ? 'bg-green-500 text-white'
+                              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                          }`}
                         >
                           10秒
                         </button>
                         <button
                           onClick={() => handleSpeedTestTimeoutChange(20000)}
-                          className={`px-2 py-0.5 rounded ${speedTestTimeout === 20000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                          className={`px-2 py-0.5 rounded ${
+                            speedTestTimeout === 20000
+                              ? 'bg-green-500 text-white'
+                              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                          }`}
                         >
                           20秒
                         </button>
                         <button
                           onClick={() => handleSpeedTestTimeoutChange(30000)}
-                          className={`px-2 py-0.5 rounded ${speedTestTimeout === 30000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                          className={`px-2 py-0.5 rounded ${
+                            speedTestTimeout === 30000
+                              ? 'bg-green-500 text-white'
+                              : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                          }`}
                         >
                           30秒
                         </button>
@@ -2282,7 +2578,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={fluidSearch}
-                          onChange={(e) => handleFluidSearchToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleFluidSearchToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2306,7 +2604,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={tmdbBackdropDisabled}
-                          onChange={(e) => handleTmdbBackdropDisabledToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleTmdbBackdropDisabledToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2330,7 +2630,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={enableTrailers}
-                          onChange={(e) => handleEnableTrailersToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleEnableTrailersToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2354,7 +2656,11 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={searchTraditionalToSimplified}
-                          onChange={(e) => handleSearchTraditionalToSimplifiedToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleSearchTraditionalToSimplifiedToggle(
+                              e.target.checked
+                            )
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2378,7 +2684,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={exactSearch}
-                          onChange={(e) => handleExactSearchToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleExactSearchToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2434,23 +2742,39 @@ export const UserMenu: React.FC = () => {
                         max='10'
                         step='1'
                         value={maxConcurrentDownloads}
-                        onChange={(e) => handleMaxConcurrentDownloadsChange(Number(e.target.value))}
+                        onChange={(e) =>
+                          handleMaxConcurrentDownloadsChange(
+                            Number(e.target.value)
+                          )
+                        }
                         className='flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700'
                         style={{
-                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${((maxConcurrentDownloads - 1) / (10 - 1)) * 100}%, #e5e7eb ${((maxConcurrentDownloads - 1) / (10 - 1)) * 100}%, #e5e7eb 100%)`
+                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${
+                            ((maxConcurrentDownloads - 1) / (10 - 1)) * 100
+                          }%, #e5e7eb ${
+                            ((maxConcurrentDownloads - 1) / (10 - 1)) * 100
+                          }%, #e5e7eb 100%)`,
                         }}
                       />
                     </div>
                     <div className='flex justify-between text-xs text-gray-500 dark:text-gray-400'>
                       <button
                         onClick={() => handleMaxConcurrentDownloadsChange(1)}
-                        className={`px-2 py-0.5 rounded ${maxConcurrentDownloads === 1 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`px-2 py-0.5 rounded ${
+                          maxConcurrentDownloads === 1
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                       >
                         1个
                       </button>
                       <button
                         onClick={() => handleMaxConcurrentDownloadsChange(10)}
-                        className={`px-2 py-0.5 rounded ${maxConcurrentDownloads === 10 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`px-2 py-0.5 rounded ${
+                          maxConcurrentDownloads === 10
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                       >
                         10个
                       </button>
@@ -2482,23 +2806,39 @@ export const UserMenu: React.FC = () => {
                         max='32'
                         step='1'
                         value={downloadThreadsPerTask}
-                        onChange={(e) => handleDownloadThreadsPerTaskChange(Number(e.target.value))}
+                        onChange={(e) =>
+                          handleDownloadThreadsPerTaskChange(
+                            Number(e.target.value)
+                          )
+                        }
                         className='flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700'
                         style={{
-                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${((downloadThreadsPerTask - 1) / (32 - 1)) * 100}%, #e5e7eb ${((downloadThreadsPerTask - 1) / (32 - 1)) * 100}%, #e5e7eb 100%)`
+                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${
+                            ((downloadThreadsPerTask - 1) / (32 - 1)) * 100
+                          }%, #e5e7eb ${
+                            ((downloadThreadsPerTask - 1) / (32 - 1)) * 100
+                          }%, #e5e7eb 100%)`,
                         }}
                       />
                     </div>
                     <div className='flex justify-between text-xs text-gray-500 dark:text-gray-400'>
                       <button
                         onClick={() => handleDownloadThreadsPerTaskChange(1)}
-                        className={`px-2 py-0.5 rounded ${downloadThreadsPerTask === 1 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`px-2 py-0.5 rounded ${
+                          downloadThreadsPerTask === 1
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                       >
                         1个
                       </button>
                       <button
                         onClick={() => handleDownloadThreadsPerTaskChange(32)}
-                        className={`px-2 py-0.5 rounded ${downloadThreadsPerTask === 32 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`px-2 py-0.5 rounded ${
+                          downloadThreadsPerTask === 32
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                       >
                         32个
                       </button>
@@ -2532,7 +2872,9 @@ export const UserMenu: React.FC = () => {
                           name='downloadMode'
                           value='filesystem'
                           checked={downloadMode === 'filesystem'}
-                          onChange={() => handleDownloadModeChange('filesystem')}
+                          onChange={() =>
+                            handleDownloadModeChange('filesystem')
+                          }
                           className='w-4 h-4 text-green-500'
                         />
                         <span className='text-sm text-gray-700 dark:text-gray-300'>
@@ -2630,27 +2972,58 @@ export const UserMenu: React.FC = () => {
                         value={getSliderValueFromStrategy(bufferStrategy)}
                         onChange={(e) => {
                           const sliderValue = parseInt(e.target.value);
-                          const strategy = getBufferStrategyFromSlider(sliderValue);
+                          const strategy =
+                            getBufferStrategyFromSlider(sliderValue);
                           handleBufferStrategyChange(strategy);
                         }}
                         className='w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-green-500'
                         style={{
-                          background: `linear-gradient(to right, rgb(34 197 94) 0%, rgb(34 197 94) ${(getSliderValueFromStrategy(bufferStrategy) / 3) * 100}%, rgb(229 231 235) ${(getSliderValueFromStrategy(bufferStrategy) / 3) * 100}%, rgb(229 231 235) 100%)`
+                          background: `linear-gradient(to right, rgb(34 197 94) 0%, rgb(34 197 94) ${
+                            (getSliderValueFromStrategy(bufferStrategy) / 3) *
+                            100
+                          }%, rgb(229 231 235) ${
+                            (getSliderValueFromStrategy(bufferStrategy) / 3) *
+                            100
+                          }%, rgb(229 231 235) 100%)`,
                         }}
                       />
 
                       {/* 标签显示 */}
                       <div className='flex justify-between text-xs text-gray-500 dark:text-gray-400 px-1'>
-                        <span className={bufferStrategy === 'low' ? 'font-semibold text-green-600 dark:text-green-400' : ''}>
+                        <span
+                          className={
+                            bufferStrategy === 'low'
+                              ? 'font-semibold text-green-600 dark:text-green-400'
+                              : ''
+                          }
+                        >
                           低缓冲
                         </span>
-                        <span className={bufferStrategy === 'medium' ? 'font-semibold text-green-600 dark:text-green-400' : ''}>
+                        <span
+                          className={
+                            bufferStrategy === 'medium'
+                              ? 'font-semibold text-green-600 dark:text-green-400'
+                              : ''
+                          }
+                        >
                           中缓冲
                         </span>
-                        <span className={bufferStrategy === 'high' ? 'font-semibold text-green-600 dark:text-green-400' : ''}>
+                        <span
+                          className={
+                            bufferStrategy === 'high'
+                              ? 'font-semibold text-green-600 dark:text-green-400'
+                              : ''
+                          }
+                        >
                           高缓冲
                         </span>
-                        <span className={bufferStrategy === 'ultra' ? 'font-semibold text-green-600 dark:text-green-400' : ''}>
+                        <span
+                          className={
+                            bufferStrategy === 'ultra'
+                              ? 'font-semibold text-green-600 dark:text-green-400'
+                              : ''
+                          }
+                        >
                           超高缓冲
                         </span>
                       </div>
@@ -2682,7 +3055,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={nextEpisodePreCache}
-                          onChange={(e) => handleNextEpisodePreCacheToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleNextEpisodePreCacheToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2729,7 +3104,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={disableAutoLoadDanmaku}
-                          onChange={(e) => handleDisableAutoLoadDanmakuToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleDisableAutoLoadDanmakuToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2753,7 +3130,11 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={nextEpisodeDanmakuPreload}
-                          onChange={(e) => handleNextEpisodeDanmakuPreloadToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleNextEpisodeDanmakuPreloadToggle(
+                              e.target.checked
+                            )
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2777,7 +3158,9 @@ export const UserMenu: React.FC = () => {
                           type='checkbox'
                           className='sr-only peer'
                           checked={danmakuHeatmapDisabled}
-                          onChange={(e) => handleDanmakuHeatmapDisabledToggle(e.target.checked)}
+                          onChange={(e) =>
+                            handleDanmakuHeatmapDisabledToggle(e.target.checked)
+                          }
                         />
                         <div className='w-11 h-6 bg-gray-300 rounded-full peer-checked:bg-green-500 transition-colors dark:bg-gray-600'></div>
                         <div className='absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full transition-transform peer-checked:translate-x-5'></div>
@@ -2792,7 +3175,9 @@ export const UserMenu: React.FC = () => {
                         弹幕加载上限
                       </span>
                       <span className='text-xs font-medium text-gray-700 dark:text-gray-300'>
-                        {danmakuMaxCount === 0 ? '无上限' : `${danmakuMaxCount} 条`}
+                        {danmakuMaxCount === 0
+                          ? '无上限'
+                          : `${danmakuMaxCount} 条`}
                       </span>
                     </div>
                     <div className='flex items-center gap-2'>
@@ -2802,38 +3187,63 @@ export const UserMenu: React.FC = () => {
                         max='10000'
                         step='100'
                         value={danmakuMaxCount}
-                        onChange={(e) => handleDanmakuMaxCountChange(parseInt(e.target.value))}
+                        onChange={(e) =>
+                          handleDanmakuMaxCountChange(parseInt(e.target.value))
+                        }
                         className='flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700'
                         style={{
-                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${(danmakuMaxCount / 10000) * 100}%, #e5e7eb ${(danmakuMaxCount / 10000) * 100}%, #e5e7eb 100%)`
+                          background: `linear-gradient(to right, #10b981 0%, #10b981 ${
+                            (danmakuMaxCount / 10000) * 100
+                          }%, #e5e7eb ${
+                            (danmakuMaxCount / 10000) * 100
+                          }%, #e5e7eb 100%)`,
                         }}
                       />
                     </div>
-                    <div className='relative text-xs text-gray-500 dark:text-gray-400' style={{ height: '24px' }}>
+                    <div
+                      className='relative text-xs text-gray-500 dark:text-gray-400'
+                      style={{ height: '24px' }}
+                    >
                       <button
                         onClick={() => handleDanmakuMaxCountChange(0)}
-                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 0 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`absolute px-2 py-0.5 rounded ${
+                          danmakuMaxCount === 0
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                         style={{ left: '0%', transform: 'translateX(0%)' }}
                       >
                         无上限
                       </button>
                       <button
                         onClick={() => handleDanmakuMaxCountChange(3000)}
-                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 3000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`absolute px-2 py-0.5 rounded ${
+                          danmakuMaxCount === 3000
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                         style={{ left: '30%', transform: 'translateX(-50%)' }}
                       >
                         3000
                       </button>
                       <button
                         onClick={() => handleDanmakuMaxCountChange(5000)}
-                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 5000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`absolute px-2 py-0.5 rounded ${
+                          danmakuMaxCount === 5000
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                         style={{ left: '50%', transform: 'translateX(-50%)' }}
                       >
                         5000
                       </button>
                       <button
                         onClick={() => handleDanmakuMaxCountChange(10000)}
-                        className={`absolute px-2 py-0.5 rounded ${danmakuMaxCount === 10000 ? 'bg-green-500 text-white' : 'hover:bg-gray-200 dark:hover:bg-gray-700'}`}
+                        className={`absolute px-2 py-0.5 rounded ${
+                          danmakuMaxCount === 10000
+                            ? 'bg-green-500 text-white'
+                            : 'hover:bg-gray-200 dark:hover:bg-gray-700'
+                        }`}
                         style={{ left: '100%', transform: 'translateX(-100%)' }}
                       >
                         10000
@@ -2851,6 +3261,9 @@ export const UserMenu: React.FC = () => {
                         弹幕缓存管理
                       </h4>
                       <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                        弹幕缓存空间占用：{danmakuCacheUsage}
+                      </p>
+                      <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
                         清除所有已缓存的弹幕数据
                       </p>
                     </div>
@@ -2866,8 +3279,18 @@ export const UserMenu: React.FC = () => {
                         </>
                       ) : (
                         <>
-                          <svg className='w-4 h-4' fill='none' stroke='currentColor' viewBox='0 0 24 24'>
-                            <path strokeLinecap='round' strokeLinejoin='round' strokeWidth={2} d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16' />
+                          <svg
+                            className='w-4 h-4'
+                            fill='none'
+                            stroke='currentColor'
+                            viewBox='0 0 24 24'
+                          >
+                            <path
+                              strokeLinecap='round'
+                              strokeLinejoin='round'
+                              strokeWidth={2}
+                              d='M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+                            />
                           </svg>
                           <span>清除弹幕缓存</span>
                         </>
@@ -2876,11 +3299,13 @@ export const UserMenu: React.FC = () => {
 
                     {/* 成功/失败提示 */}
                     {clearCacheMessage && (
-                      <div className={`text-sm p-3 rounded-lg border ${
-                        clearCacheMessage.includes('成功')
-                          ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
-                      }`}>
+                      <div
+                        className={`text-sm p-3 rounded-lg border ${
+                          clearCacheMessage.includes('成功')
+                            ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                            : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+                        }`}
+                      >
                         {clearCacheMessage}
                       </div>
                     )}
@@ -2911,15 +3336,71 @@ export const UserMenu: React.FC = () => {
                 <div className='p-3 md:p-4 space-y-4 md:space-y-6'>
                   <div>
                     <p className='text-xs text-gray-500 dark:text-gray-400 mb-3'>
-                      配置首页模块的显示顺序和可见性
+                      配置首页轮播图显示效果，以及首页模块布局
                     </p>
                   </div>
 
-                  {/* 首页顶部组件显示 */}
+                  {/* 轮播图配置 */}
                   <div className='space-y-2'>
+                    <div>
+                      <h4 className='text-sm font-semibold text-gray-800 dark:text-gray-200'>
+                        轮播图配置
+                      </h4>
+                    </div>
+                    <div className='p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 space-y-3'>
+                      <div>
+                        <div className='text-sm font-medium text-gray-900 dark:text-gray-100'>
+                          轮播图高度
+                        </div>
+                        <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                          调整首页轮播图显示高度
+                        </p>
+                      </div>
+                      <div className='grid grid-cols-3 gap-2'>
+                        {homeBannerHeightOptions.map((option) => (
+                          <button
+                            key={option.value}
+                            onClick={() =>
+                              handleHomeBannerHeightScaleChange(option.value)
+                            }
+                            className={`px-3 py-2 rounded-lg text-sm font-medium border transition-colors ${
+                              homeBannerHeightScale === option.value
+                                ? 'bg-blue-500 border-blue-500 text-white shadow-sm'
+                                : 'bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                            }`}
+                            title={`${option.label}（${option.description}）`}
+                          >
+                            <span>{option.label}</span>
+                            <span
+                              className={`ml-1 text-xs ${
+                                homeBannerHeightScale === option.value
+                                  ? 'text-blue-100'
+                                  : 'text-gray-500 dark:text-gray-400'
+                              }`}
+                            >
+                              {option.description}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 模块显示与排序 */}
+                  <div className='space-y-3 rounded-lg border border-gray-200 dark:border-gray-700 p-3'>
+                    <div>
+                      <h4 className='text-sm font-semibold text-gray-800 dark:text-gray-200'>
+                        模块显示与排序
+                      </h4>
+                      <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
+                        控制首页组件和内容模块的显示/隐藏与顺序
+                      </p>
+                    </div>
                     <div className='flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700'>
                       <button
-                        onClick={() => handleHomeBannerToggle(!homeBannerEnabled)}
+                        onClick={() =>
+                          handleHomeBannerToggle(!homeBannerEnabled)
+                        }
                         className='flex-shrink-0'
                         title={homeBannerEnabled ? '点击隐藏' : '点击显示'}
                       >
@@ -2930,11 +3411,13 @@ export const UserMenu: React.FC = () => {
                         )}
                       </button>
                       <div className='flex-1'>
-                        <span className={`text-sm font-medium ${
-                          homeBannerEnabled
-                            ? 'text-gray-900 dark:text-gray-100'
-                            : 'text-gray-400 dark:text-gray-500'
-                        }`}>
+                        <span
+                          className={`text-sm font-medium ${
+                            homeBannerEnabled
+                              ? 'text-gray-900 dark:text-gray-100'
+                              : 'text-gray-400 dark:text-gray-500'
+                          }`}
+                        >
                           首页轮播图
                         </span>
                       </div>
@@ -2942,9 +3425,15 @@ export const UserMenu: React.FC = () => {
 
                     <div className='flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700'>
                       <button
-                        onClick={() => handleHomeContinueWatchingToggle(!homeContinueWatchingEnabled)}
+                        onClick={() =>
+                          handleHomeContinueWatchingToggle(
+                            !homeContinueWatchingEnabled
+                          )
+                        }
                         className='flex-shrink-0'
-                        title={homeContinueWatchingEnabled ? '点击隐藏' : '点击显示'}
+                        title={
+                          homeContinueWatchingEnabled ? '点击隐藏' : '点击显示'
+                        }
                       >
                         {homeContinueWatchingEnabled ? (
                           <Eye className='w-5 h-5 text-green-600 dark:text-green-400' />
@@ -2953,69 +3442,75 @@ export const UserMenu: React.FC = () => {
                         )}
                       </button>
                       <div className='flex-1'>
-                        <span className={`text-sm font-medium ${
-                          homeContinueWatchingEnabled
-                            ? 'text-gray-900 dark:text-gray-100'
-                            : 'text-gray-400 dark:text-gray-500'
-                        }`}>
+                        <span
+                          className={`text-sm font-medium ${
+                            homeContinueWatchingEnabled
+                              ? 'text-gray-900 dark:text-gray-100'
+                              : 'text-gray-400 dark:text-gray-500'
+                          }`}
+                        >
                           继续观看
                         </span>
                       </div>
                     </div>
-                  </div>
 
-                  {/* 模块列表 */}
-                  <div className='space-y-2'>
-                    {homeModules.map((module, index) => (
-                      <div
-                        key={module.id}
-                        className='flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700'
-                      >
-                        {/* 左侧：显示/隐藏开关 */}
-                        <button
-                          onClick={() => handleHomeModuleToggle(module.id, !module.enabled)}
-                          className='flex-shrink-0'
-                          title={module.enabled ? '点击隐藏' : '点击显示'}
+                    {/* 模块列表 */}
+                    <div className='space-y-2'>
+                      {homeModules.map((module, index) => (
+                        <div
+                          key={module.id}
+                          className='flex items-center gap-2 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700'
                         >
-                          {module.enabled ? (
-                            <Eye className='w-5 h-5 text-green-600 dark:text-green-400' />
-                          ) : (
-                            <EyeOff className='w-5 h-5 text-gray-400 dark:text-gray-500' />
-                          )}
-                        </button>
-
-                        {/* 中间：模块名称 */}
-                        <div className='flex-1'>
-                          <span className={`text-sm font-medium ${
-                            module.enabled
-                              ? 'text-gray-900 dark:text-gray-100'
-                              : 'text-gray-400 dark:text-gray-500'
-                          }`}>
-                            {module.name}
-                          </span>
-                        </div>
-
-                        {/* 右侧：上下移动按钮 */}
-                        <div className='flex gap-1'>
+                          {/* 左侧：显示/隐藏开关 */}
                           <button
-                            onClick={() => handleHomeModuleMoveUp(index)}
-                            disabled={index === 0}
-                            className='p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
-                            title='上移'
+                            onClick={() =>
+                              handleHomeModuleToggle(module.id, !module.enabled)
+                            }
+                            className='flex-shrink-0'
+                            title={module.enabled ? '点击隐藏' : '点击显示'}
                           >
-                            <MoveUp className='w-4 h-4 text-gray-600 dark:text-gray-400' />
+                            {module.enabled ? (
+                              <Eye className='w-5 h-5 text-green-600 dark:text-green-400' />
+                            ) : (
+                              <EyeOff className='w-5 h-5 text-gray-400 dark:text-gray-500' />
+                            )}
                           </button>
-                          <button
-                            onClick={() => handleHomeModuleMoveDown(index)}
-                            disabled={index === homeModules.length - 1}
-                            className='p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
-                            title='下移'
-                          >
-                            <MoveDown className='w-4 h-4 text-gray-600 dark:text-gray-400' />
-                          </button>
+
+                          {/* 中间：模块名称 */}
+                          <div className='flex-1'>
+                            <span
+                              className={`text-sm font-medium ${
+                                module.enabled
+                                  ? 'text-gray-900 dark:text-gray-100'
+                                  : 'text-gray-400 dark:text-gray-500'
+                              }`}
+                            >
+                              {module.name}
+                            </span>
+                          </div>
+
+                          {/* 右侧：上下移动按钮 */}
+                          <div className='flex gap-1'>
+                            <button
+                              onClick={() => handleHomeModuleMoveUp(index)}
+                              disabled={index === 0}
+                              className='p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+                              title='上移'
+                            >
+                              <MoveUp className='w-4 h-4 text-gray-600 dark:text-gray-400' />
+                            </button>
+                            <button
+                              onClick={() => handleHomeModuleMoveDown(index)}
+                              disabled={index === homeModules.length - 1}
+                              className='p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors'
+                              title='下移'
+                            >
+                              <MoveDown className='w-4 h-4 text-gray-600 dark:text-gray-400' />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
 
                   {/* 恢复默认按钮 */}
@@ -3023,12 +3518,22 @@ export const UserMenu: React.FC = () => {
                     onClick={() => {
                       setHomeModules(defaultHomeModules);
                       setHomeBannerEnabled(true);
+                      setHomeBannerHeightScale('1');
                       setHomeContinueWatchingEnabled(true);
                       if (typeof window !== 'undefined') {
-                        localStorage.setItem('homeModules', JSON.stringify(defaultHomeModules));
+                        localStorage.setItem(
+                          'homeModules',
+                          JSON.stringify(defaultHomeModules)
+                        );
                         localStorage.setItem('homeBannerEnabled', 'true');
-                        localStorage.setItem('homeContinueWatchingEnabled', 'true');
-                        window.dispatchEvent(new CustomEvent('homeModulesUpdated'));
+                        localStorage.setItem('homeBannerHeightScale', '1');
+                        localStorage.setItem(
+                          'homeContinueWatchingEnabled',
+                          'true'
+                        );
+                        window.dispatchEvent(
+                          new CustomEvent('homeModulesUpdated')
+                        );
                       }
                     }}
                     className='w-full px-4 py-2 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 text-sm font-medium rounded-lg transition-colors'
@@ -3038,7 +3543,10 @@ export const UserMenu: React.FC = () => {
 
                   {/* 提示信息 */}
                   <div className='text-xs text-gray-500 dark:text-gray-400 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg'>
-                    <p>💡 提示：点击眼睛图标可显示/隐藏模块，使用箭头按钮调整模块顺序</p>
+                    <p>
+                      💡
+                      提示：点击眼睛图标可显示/隐藏模块，使用箭头按钮调整模块顺序
+                    </p>
                   </div>
                 </div>
               )}
@@ -3075,9 +3583,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 订阅面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'
-      >
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'>
         <div
           className='h-full p-6'
           data-panel-content
@@ -3151,14 +3657,28 @@ export const UserMenu: React.FC = () => {
                         开启后通过代理处理播放链接，兼容性可能略低
                       </div>
                     </div>
-                    <div className={`relative h-6 w-11 rounded-full transition-colors ${subscribeAdFilterEnabled ? 'bg-green-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${subscribeAdFilterEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        subscribeAdFilterEnabled
+                          ? 'bg-green-500'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                          subscribeAdFilterEnabled
+                            ? 'translate-x-5'
+                            : 'translate-x-0.5'
+                        }`}
+                      />
                     </div>
                   </button>
 
                   <button
                     type='button'
-                    onClick={() => setSubscribeYellowFilterEnabled((prev) => !prev)}
+                    onClick={() =>
+                      setSubscribeYellowFilterEnabled((prev) => !prev)
+                    }
                     className='w-full flex items-center justify-between rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-3 text-left bg-gray-50 dark:bg-gray-800/70'
                   >
                     <div>
@@ -3169,8 +3689,20 @@ export const UserMenu: React.FC = () => {
                         开启后同样走代理，并在代理搜索时过滤黄色内容
                       </div>
                     </div>
-                    <div className={`relative h-6 w-11 rounded-full transition-colors ${subscribeYellowFilterEnabled ? 'bg-yellow-500' : 'bg-gray-300 dark:bg-gray-600'}`}>
-                      <div className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${subscribeYellowFilterEnabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    <div
+                      className={`relative h-6 w-11 rounded-full transition-colors ${
+                        subscribeYellowFilterEnabled
+                          ? 'bg-yellow-500'
+                          : 'bg-gray-300 dark:bg-gray-600'
+                      }`}
+                    >
+                      <div
+                        className={`absolute top-0.5 h-5 w-5 rounded-full bg-white transition-transform ${
+                          subscribeYellowFilterEnabled
+                            ? 'translate-x-5'
+                            : 'translate-x-0.5'
+                        }`}
+                      />
                     </div>
                   </button>
                 </div>
@@ -3194,7 +3726,8 @@ export const UserMenu: React.FC = () => {
                       {copySuccess ? '已复制' : '复制'}
                     </button>
                   </div>
-                  {(subscribeAdFilterEnabled || subscribeYellowFilterEnabled) && (
+                  {(subscribeAdFilterEnabled ||
+                    subscribeYellowFilterEnabled) && (
                     <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
                       💡 代理模式已开启，某些源可能因为区域或兼容问题无法播放
                     </p>
@@ -3214,7 +3747,10 @@ export const UserMenu: React.FC = () => {
                     ⚠️ 重置后旧链接将失效
                   </p>
                   {/* 消息提示 */}
-                  <p id='tvbox-token-message' className='text-xs text-center hidden'></p>
+                  <p
+                    id='tvbox-token-message'
+                    className='text-xs text-center hidden'
+                  ></p>
                 </div>
               </>
             )}
@@ -3252,9 +3788,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 修改密码面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'
-      >
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'>
         {/* 内容容器 - 独立的滚动区域 */}
         <div
           className='h-full p-6'
@@ -3350,277 +3884,6 @@ export const UserMenu: React.FC = () => {
     </>
   );
 
-  // 邮件设置面板内容
-  const emailSettingsPanel = (
-    <>
-      {/* 背景遮罩 */}
-      <div
-        className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000]'
-        onClick={() => setIsEmailSettingsOpen(false)}
-        onTouchMove={(e) => {
-          e.preventDefault();
-        }}
-        onWheel={(e) => {
-          e.preventDefault();
-        }}
-        style={{
-          touchAction: 'none',
-        }}
-      />
-
-      {/* 邮件设置面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'
-      >
-        <div
-          className='h-full p-6'
-          data-panel-content
-          onTouchMove={(e) => {
-            e.stopPropagation();
-          }}
-          style={{
-            touchAction: 'auto',
-          }}
-        >
-          {/* 标题栏 */}
-          <div className='flex items-center justify-between mb-6'>
-            <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-              邮件通知设置
-            </h3>
-            <button
-              onClick={() => setIsEmailSettingsOpen(false)}
-              className='w-8 h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
-              aria-label='Close'
-            >
-              <X className='w-full h-full' />
-            </button>
-          </div>
-
-          {/* 表单 */}
-          {emailSettingsLoading ? (
-            <div className='space-y-4'>
-              {/* 加载骨架屏 */}
-              <div className='animate-pulse'>
-                <div className='h-4 bg-gray-200 dark:bg-gray-700 rounded w-20 mb-2'></div>
-                <div className='h-10 bg-gray-200 dark:bg-gray-700 rounded'></div>
-              </div>
-              <div className='animate-pulse'>
-                <div className='h-20 bg-gray-200 dark:bg-gray-700 rounded'></div>
-              </div>
-              <div className='animate-pulse'>
-                <div className='h-10 bg-gray-200 dark:bg-gray-700 rounded'></div>
-              </div>
-              <div className='text-center text-sm text-gray-500 dark:text-gray-400'>
-                加载中...
-              </div>
-            </div>
-          ) : (
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2'>
-                  邮箱地址
-                </label>
-                <input
-                  type='email'
-                  value={userEmail}
-                  onChange={(e) => setUserEmail(e.target.value)}
-                  placeholder='输入您的邮箱地址'
-                  disabled={emailSettingsSaving}
-                  className='w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed'
-                />
-              </div>
-
-              <div className='flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800 rounded-lg'>
-                <div>
-                  <h4 className='text-sm font-medium text-gray-700 dark:text-gray-300'>
-                    接收收藏更新通知
-                  </h4>
-                  <p className='text-xs text-gray-500 dark:text-gray-400 mt-1'>
-                    当收藏的影片有更新时发送邮件通知
-                  </p>
-                </div>
-                <button
-                  onClick={() => setEmailNotifications(!emailNotifications)}
-                  disabled={emailSettingsSaving}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                    emailNotifications ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      emailNotifications ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
-
-              <button
-                onClick={handleSaveEmailSettings}
-                disabled={emailSettingsSaving}
-                className='w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 dark:disabled:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed flex items-center justify-center gap-2'
-              >
-                {emailSettingsSaving ? (
-                  <>
-                    <div className='w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'></div>
-                    <span>保存中...</span>
-                  </>
-                ) : (
-                  '保存设置'
-                )}
-              </button>
-
-              <p id='email-settings-message' className='text-xs text-center hidden'></p>
-            </div>
-          )}
-
-          {/* 提示信息 */}
-          <div className='mt-6 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg'>
-            <p className='text-xs text-blue-800 dark:text-blue-200'>
-              💡 提示：需要管理员先在管理面板中配置邮件服务
-            </p>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-
-  // 设备管理面板内容
-  const deviceManagementPanel = (
-    <>
-      {/* 背景遮罩 */}
-      <div
-        className='fixed inset-0 bg-black/50 backdrop-blur-sm z-[1000]'
-        onClick={() => setIsDeviceManagementOpen(false)}
-        onTouchMove={(e) => {
-          e.preventDefault();
-        }}
-        onWheel={(e) => {
-          e.preventDefault();
-        }}
-        style={{
-          touchAction: 'none',
-        }}
-      />
-
-      {/* 设备管理面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'
-      >
-        <div
-          className='h-full max-h-[80vh] flex flex-col'
-          data-panel-content
-          onTouchMove={(e) => {
-            e.stopPropagation();
-          }}
-          style={{
-            touchAction: 'auto',
-          }}
-        >
-          {/* 标题栏 */}
-          <div className='flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700'>
-            <h3 className='text-xl font-bold text-gray-800 dark:text-gray-200'>
-              设备管理
-            </h3>
-            <button
-              onClick={() => setIsDeviceManagementOpen(false)}
-              className='w-8 h-8 p-1 rounded-full flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors'
-              aria-label='Close'
-            >
-              <X className='w-full h-full' />
-            </button>
-          </div>
-
-          {/* 设备列表 */}
-          <div className='flex-1 overflow-y-auto p-6'>
-            {devicesLoading ? (
-              <div className='space-y-3'>
-                {[1, 2, 3].map((i) => (
-                  <div key={i} className='animate-pulse'>
-                    <div className='h-20 bg-gray-200 dark:bg-gray-700 rounded-lg'></div>
-                  </div>
-                ))}
-                <div className='text-center text-sm text-gray-500 dark:text-gray-400 mt-4'>
-                  加载中...
-                </div>
-              </div>
-            ) : devices.length === 0 ? (
-              <div className='text-center py-8'>
-                <Monitor className='w-12 h-12 mx-auto text-gray-400 dark:text-gray-500 mb-3' />
-                <p className='text-sm text-gray-500 dark:text-gray-400'>暂无登录设备</p>
-              </div>
-            ) : (
-              <div className='space-y-3'>
-                {devices
-                  .sort((a, b) => {
-                    // 当前设备置顶
-                    if (a.isCurrent && !b.isCurrent) return -1;
-                    if (!a.isCurrent && b.isCurrent) return 1;
-                    return 0;
-                  })
-                  .map((device) => {
-                  const DeviceIcon = getDeviceIcon(device.deviceInfo);
-                  return (
-                    <div
-                      key={device.tokenId}
-                      className={`p-4 bg-gray-50 dark:bg-gray-800 rounded-lg border ${
-                        device.isCurrent
-                          ? 'border-yellow-400 dark:border-yellow-500'
-                          : 'border-gray-200 dark:border-gray-700'
-                      }`}
-                    >
-                      <div className='flex items-start justify-between'>
-                        <div className='flex-1'>
-                          <div className='flex items-center gap-2 mb-2'>
-                            <DeviceIcon className='w-4 h-4 text-gray-600 dark:text-gray-400' />
-                            <span className='text-sm font-medium text-gray-900 dark:text-gray-100'>
-                              {device.deviceInfo}
-                            </span>
-                            {device.isCurrent && (
-                              <span className='px-2 py-0.5 text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300 rounded-full'>
-                                当前设备
-                              </span>
-                            )}
-                          </div>
-                          <div className='space-y-1 text-xs text-gray-500 dark:text-gray-400'>
-                            <div>登录时间: {new Date(device.createdAt).toLocaleString('zh-CN')}</div>
-                            <div>最后活跃: {new Date(device.lastUsed).toLocaleString('zh-CN')}</div>
-                          </div>
-                        </div>
-                        {!device.isCurrent && (
-                          <button
-                            onClick={() => handleRevokeDevice(device.tokenId)}
-                            disabled={revoking === device.tokenId}
-                            className='ml-3 px-3 py-1.5 text-xs font-medium text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 border border-red-200 hover:border-red-300 dark:border-red-800 dark:hover:border-red-700 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
-                          >
-                            {revoking === device.tokenId ? '撤销中...' : '撤销'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* 底部操作 */}
-          <div className='p-6 border-t border-gray-200 dark:border-gray-700 space-y-3'>
-            <button
-              onClick={handleRevokeAllDevices}
-              disabled={devices.length === 0}
-              className='w-full px-4 py-2.5 bg-red-500 hover:bg-red-600 disabled:bg-red-400 dark:bg-red-600 dark:hover:bg-red-700 dark:disabled:bg-red-500 text-white text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed'
-            >
-              登出所有设备
-            </button>
-            <p className='text-xs text-gray-500 dark:text-gray-400 text-center'>
-              登出所有设备后需要重新登录
-            </p>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-
   // 举报信息弹窗
   const reportPanel = (
     <>
@@ -3640,9 +3903,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 举报信息面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1003] overflow-hidden'
-      >
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1003] overflow-hidden'>
         <div
           className='h-full max-h-[70vh] flex flex-col'
           data-panel-content
@@ -3671,13 +3932,20 @@ export const UserMenu: React.FC = () => {
           <div className='flex-1 overflow-y-auto p-6'>
             <div className='bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4'>
               <p className='text-gray-800 dark:text-gray-200 leading-relaxed'>
-                抄袭狗<span className='font-bold text-red-600 dark:text-red-400'>SzeMeng76</span>毫无廉耻，盯着本项目的commit区，疯狂抄袭。警告亦全当看不见，实为开源界耻辱。
+                抄袭狗
+                <span className='font-bold text-red-600 dark:text-red-400'>
+                  SzeMeng76
+                </span>
+                毫无廉耻，盯着本项目的commit区，疯狂抄袭。警告亦全当看不见，实为开源界耻辱。
               </p>
               <p className='text-gray-800 dark:text-gray-200 leading-relaxed mt-3'>
                 超分，观影室，豆瓣反爬，精确搜索等等等等，直接抄袭，最不要脸的就是，刚更新一版，几小时后直接抄走。
               </p>
               <p className='text-gray-800 dark:text-gray-200 leading-relaxed mt-3'>
-                <span className='font-semibold text-red-600 dark:text-red-400'>2026-02-25：</span>抄袭emby功能
+                <span className='font-semibold text-red-600 dark:text-red-400'>
+                  2026-02-25：
+                </span>
+                抄袭emby功能
               </p>
             </div>
           </div>
@@ -3715,9 +3983,7 @@ export const UserMenu: React.FC = () => {
       />
 
       {/* 生态应用面板 */}
-      <div
-        className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'
-      >
+      <div className='fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl bg-white dark:bg-gray-900 rounded-xl shadow-xl z-[1001] overflow-hidden'>
         <div
           className='h-full max-h-[85vh] flex flex-col'
           data-panel-content
@@ -3848,7 +4114,7 @@ export const UserMenu: React.FC = () => {
                       tv专用
                     </p>
                     <a
-                      href='https://github.com/mtvpls/MoonTVPlus/releases/tag/OrionTV%E9%80%82%E9%85%8D%E7%89%882'
+                      href='https://github.com/mtvpls/OrionTV_Build/tags'
                       target='_blank'
                       rel='noopener noreferrer'
                       className='inline-flex items-center gap-2 px-4 py-2 bg-indigo-500 hover:bg-indigo-600 text-white text-sm font-medium rounded-lg transition-colors'
@@ -3877,7 +4143,8 @@ export const UserMenu: React.FC = () => {
                       私人影库转码器
                     </h4>
                     <p className='text-sm text-gray-600 dark:text-gray-400 mb-3'>
-                      为私人影库中的 MKV 视频提供转码播放能力，可解析内封字幕并解决部分视频无音频问题，但通常需要较高的本机性能配置。
+                      为私人影库中的 MKV
+                      视频提供转码播放能力，可解析内封字幕并解决部分视频无音频问题，但通常需要较高的本机性能配置。
                     </p>
                     <a
                       href='https://github.com/mtvpls/moontvplus-transcoder/tags'
@@ -3928,6 +4195,33 @@ export const UserMenu: React.FC = () => {
 
       {/* 使用 Portal 将菜单面板渲染到 document.body */}
       {isOpen && mounted && createPortal(menuPanel, document.body)}
+
+      <PersonalCenterPanel
+        isOpen={isProfileCenterOpen}
+        mounted={mounted}
+        onClose={() => setIsProfileCenterOpen(false)}
+        username={currentUsername}
+        roleText={currentRoleText}
+        showRoleBadge={shouldShowRoleBadge}
+        avatarText={avatarText}
+        roleBadgeClassName={roleBadgeClassName}
+        showDeviceManagement={storageType !== 'localstorage'}
+        showChangePassword={showChangePassword}
+        onOpenEmailSettings={() => {
+          setIsProfileCenterOpen(false);
+          setIsEmailSettingsOpen(true);
+          loadEmailSettings();
+        }}
+        onOpenDeviceManagement={() => {
+          setIsProfileCenterOpen(false);
+          setIsDeviceManagementOpen(true);
+          loadDevices();
+        }}
+        onOpenChangePassword={() => {
+          setIsProfileCenterOpen(false);
+          handleChangePassword();
+        }}
+      />
 
       {/* 使用 Portal 将设置面板渲染到 document.body */}
       {isSettingsOpen && mounted && createPortal(settingsPanel, document.body)}
@@ -3990,25 +4284,38 @@ export const UserMenu: React.FC = () => {
           document.body
         )}
 
-      {/* 使用 Portal 将邮件设置面板渲染到 document.body */}
-      {isEmailSettingsOpen &&
-        mounted &&
-        createPortal(emailSettingsPanel, document.body)}
+      <EmailSettingsPanel
+        isOpen={isEmailSettingsOpen}
+        mounted={mounted}
+        onClose={() => setIsEmailSettingsOpen(false)}
+        userEmail={userEmail}
+        onUserEmailChange={setUserEmail}
+        emailNotifications={emailNotifications}
+        onEmailNotificationsChange={setEmailNotifications}
+        emailSettingsLoading={emailSettingsLoading}
+        emailSettingsSaving={emailSettingsSaving}
+        onSave={handleSaveEmailSettings}
+        statusMessage={emailSettingsMessage}
+        statusType={emailSettingsMessageType}
+      />
 
-      {/* 使用 Portal 将设备管理面板渲染到 document.body */}
-      {isDeviceManagementOpen &&
-        mounted &&
-        createPortal(deviceManagementPanel, document.body)}
+      <DeviceManagementPanel
+        isOpen={isDeviceManagementOpen}
+        mounted={mounted}
+        onClose={() => setIsDeviceManagementOpen(false)}
+        devices={devices}
+        devicesLoading={devicesLoading}
+        revoking={revoking}
+        onRevokeDevice={handleRevokeDevice}
+        onRevokeAllDevices={handleRevokeAllDevices}
+        getDeviceIcon={getDeviceIcon}
+      />
 
       {/* 使用 Portal 将生态应用面板渲染到 document.body */}
-      {isEcoAppsOpen &&
-        mounted &&
-        createPortal(ecoAppsPanel, document.body)}
+      {isEcoAppsOpen && mounted && createPortal(ecoAppsPanel, document.body)}
 
       {/* 使用 Portal 将举报信息面板渲染到 document.body */}
-      {isReportOpen &&
-        mounted &&
-        createPortal(reportPanel, document.body)}
+      {isReportOpen && mounted && createPortal(reportPanel, document.body)}
 
       {/* 确认对话框 */}
       {confirmDialog.isOpen &&
@@ -4033,7 +4340,9 @@ export const UserMenu: React.FC = () => {
               {/* 按钮 */}
               <div className='p-6 pt-0 flex gap-3 justify-end'>
                 <button
-                  onClick={() => setConfirmDialog({ ...confirmDialog, isOpen: false })}
+                  onClick={() =>
+                    setConfirmDialog({ ...confirmDialog, isOpen: false })
+                  }
                   className='px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 rounded-lg transition-colors'
                 >
                   取消
